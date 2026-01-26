@@ -21,15 +21,15 @@ public class FarmerService {
     }
 
     /**
-     * Create farmer: First create user in Keycloak, then save to database with Keycloak user ID
+     * Create farmer: First create user in Keycloak (with auto-generated temporary password),
+     * then save to database with Keycloak user ID
      */
-    public Farmer create(Farmer f, String password) {
+    public Farmer create(Farmer f) {
         try {
-            // Step 1: Create user in Keycloak
+            // Step 1: Create user in Keycloak (password is auto-generated and temporary)
             String keycloakUserId = keycloakAdminService.createUser(
                     f.getUsername(),
                     f.getEmail(),
-                    password,
                     extractFirstName(f.getFullName()),
                     extractLastName(f.getFullName()),
                     "FARMER" // Assign FARMER role
