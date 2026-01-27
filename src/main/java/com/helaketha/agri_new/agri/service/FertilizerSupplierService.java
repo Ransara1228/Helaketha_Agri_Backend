@@ -2,6 +2,7 @@ package com.helaketha.agri_new.agri.service;
 
 import com.helaketha.agri_new.agri.entity.FertilizerSupplier;
 import com.helaketha.agri_new.agri.repository.FertilizerSupplierRepository;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +14,7 @@ import java.util.Optional;
 public class FertilizerSupplierService {
 
     private final FertilizerSupplierRepository dao;
-    private final KeycloakAdminService keycloakAdminService; // Inject Keycloak Service
+    private final KeycloakAdminService keycloakAdminService;
 
     public FertilizerSupplierService(FertilizerSupplierRepository dao, KeycloakAdminService keycloakAdminService) {
         this.dao = dao;
@@ -22,73 +23,66 @@ public class FertilizerSupplierService {
 
     public FertilizerSupplier create(FertilizerSupplier s) {
         String keycloakUserId = null;
+        boolean isNewUser = false;
+
         try {
-            // 1. Create User in Keycloak
-            // This generates a temporary password automatically
-            keycloakUserId = keycloakAdminService.createUser(
-                    s.getUsername(),
-                    s.getEmail(),
-                    extractFirstName(s.getName()),
-                    extractLastName(s.getName()),
-                    "FERTILIZER_SUPPLIER" // Assign Role
-            );
+            // 1. Keycloak Logic
+            try {
+                keycloakUserId = keycloakAdminService.createUser(
+                        s.getUsername(),
+                        s.getEmail(),
+                        extractFirstName(s.getName()),
+                        extractLastName(s.getName()),
+                        "FERTILIZER_SUPPLIER"
+                );
+                isNewUser = true;
+            } catch (RuntimeException e) {
+                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
+                    try {
+                        keycloakUserId = keycloakAdminService.getUserIdByUsername(s.getUsername());
+                        String newPass = keycloakAdminService.generateTemporaryPassword();
+                        keycloakAdminService.updateUserPassword(keycloakUserId, newPass);
+                        keycloakAdminService.assignRole(keycloakUserId, "FERTILIZER_SUPPLIER");
+                    } catch (RuntimeException notFoundEx) {
+                        throw new RuntimeException("The email address is already in use by another account.");
+                    }
+                } else {
+                    throw e;
+                }
+            }
 
-            // 2. Link Keycloak ID to the local entity
+            // 2. Database Logic
             s.setKeycloakUserId(keycloakUserId);
-
-            // 3. Save to Local MySQL Database
             int id = dao.insert(s);
             s.setSupplierId(id);
             return s;
 
-        } catch (Exception e) {
-            // Rollback: If DB save fails, delete the user from Keycloak to prevent orphans
-            if (keycloakUserId != null) {
-                try {
-                    keycloakAdminService.deleteUser(keycloakUserId);
-                } catch (Exception ex) {
-                    System.err.println("Error rolling back Keycloak user: " + ex.getMessage());
-                }
+        } catch (DuplicateKeyException dke) {
+            // --- CATCH DB DUPLICATE USERNAME ---
+            if (isNewUser && keycloakUserId != null) {
+                try { keycloakAdminService.deleteUser(keycloakUserId); } catch (Exception ex) {}
             }
-            throw new RuntimeException("Failed to create supplier: " + e.getMessage(), e);
+            throw new RuntimeException("User name already exists");
+
+        } catch (Exception e) {
+            if (isNewUser && keycloakUserId != null) {
+                try { keycloakAdminService.deleteUser(keycloakUserId); } catch (Exception ex) {}
+            }
+            throw new RuntimeException(e.getMessage());
         }
     }
 
-    public List<FertilizerSupplier> findAll() {
-        return dao.findAll();
-    }
-
-    public Optional<FertilizerSupplier> findById(int id) {
-        return dao.findById(id);
-    }
-
-    public FertilizerSupplier update(int id, FertilizerSupplier s) {
-        s.setSupplierId(id);
-        dao.update(s);
-        return s;
-    }
-
+    public List<FertilizerSupplier> findAll() { return dao.findAll(); }
+    public Optional<FertilizerSupplier> findById(int id) { return dao.findById(id); }
+    public FertilizerSupplier update(int id, FertilizerSupplier s) { s.setSupplierId(id); dao.update(s); return s; }
     public boolean delete(int id) {
-        // Also delete from Keycloak when deleting from DB
-        Optional<FertilizerSupplier> existing = dao.findById(id);
-        if (existing.isPresent() && existing.get().getKeycloakUserId() != null) {
-            try {
-                keycloakAdminService.deleteUser(existing.get().getKeycloakUserId());
-            } catch (Exception e) {
-                System.err.println("Warning: Could not delete user from Keycloak: " + e.getMessage());
-            }
+        Optional<FertilizerSupplier> opt = dao.findById(id);
+        if (opt.isPresent() && opt.get().getKeycloakUserId() != null) {
+            try { keycloakAdminService.deleteUser(opt.get().getKeycloakUserId()); } catch (Exception e) {}
         }
         return dao.delete(id) > 0;
     }
 
-    // Helpers to split full name
-    private String extractFirstName(String fullName) {
-        return (fullName != null && !fullName.trim().isEmpty()) ? fullName.trim().split("\\s+")[0] : "Supplier";
-    }
-
-    private String extractLastName(String fullName) {
-        if (fullName == null || fullName.trim().isEmpty()) return "";
-        String[] parts = fullName.trim().split("\\s+");
-        return parts.length > 1 ? parts[parts.length - 1] : "";
-    }
+    private String extractFirstName(String name) { return (name != null && !name.isBlank()) ? name.trim().split("\\s+")[0] : ""; }
+    private String extractLastName(String name) { if (name == null || name.isBlank()) return ""; String[] p = name.trim().split("\\s+"); return p.length > 1 ? p[p.length - 1] : ""; }
 }
