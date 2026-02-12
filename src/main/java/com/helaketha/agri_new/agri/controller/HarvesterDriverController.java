@@ -2,8 +2,12 @@ package com.helaketha.agri_new.agri.controller;
 
 import com.helaketha.agri_new.agri.entity.HarvesterDriver;
 import com.helaketha.agri_new.agri.service.HarvesterDriverService;
+import com.helaketha.agri_new.agri.security.UserPrincipal; // Added Import
 import jakarta.validation.Valid;
+import org.slf4j.Logger; // Added Import
+import org.slf4j.LoggerFactory; // Added Import
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal; // Added Import
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +20,7 @@ import java.util.List;
 public class HarvesterDriverController {
 
     private final HarvesterDriverService service;
+    private static final Logger log = LoggerFactory.getLogger(HarvesterDriverController.class); // Added Logger
 
     public HarvesterDriverController(HarvesterDriverService service) {
         this.service = service;
@@ -28,7 +33,10 @@ public class HarvesterDriverController {
     }
 
     @GetMapping
-    public List<HarvesterDriver> getAll() {
+    public List<HarvesterDriver> getAll(@AuthenticationPrincipal UserPrincipal principal) {
+        // This captures the 'sub' from Keycloak which matches your database keycloak_user_id
+        String userId = principal != null ? principal.getUserId() : null;
+        log.info("UserID from principal : {}", userId);
         return service.findAll();
     }
 

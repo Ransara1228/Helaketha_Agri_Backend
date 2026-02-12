@@ -3,9 +3,13 @@ package com.helaketha.agri_new.agri.controller;
 import com.helaketha.agri_new.agri.dto.FarmerPatchRequest;
 import com.helaketha.agri_new.agri.dto.FarmerRequest;
 import com.helaketha.agri_new.agri.entity.Farmer;
+import com.helaketha.agri_new.agri.security.UserPrincipal;
 import com.helaketha.agri_new.agri.service.FarmerService;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +22,7 @@ import java.util.List;
 public class FarmerController {
 
     private final FarmerService service;
+    private static final Logger log = LoggerFactory.getLogger(FarmerController.class);
 
     public FarmerController(FarmerService service) {
         this.service = service;
@@ -32,7 +37,9 @@ public class FarmerController {
     }
 
     @GetMapping
-    public List<Farmer> getFarmers() {
+    public List<Farmer> getFarmers(@AuthenticationPrincipal UserPrincipal principal) {
+        String userId = principal != null ? principal.getUserId() : null;
+        log.info("UserID from principal: {}", userId);
         return service.findAll();
     }
 
@@ -63,4 +70,5 @@ public class FarmerController {
             return ResponseEntity.ok(existing);
         }).orElse(ResponseEntity.notFound().build());
     }
+
 }
