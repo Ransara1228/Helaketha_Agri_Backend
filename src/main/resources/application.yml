@@ -1,11 +1,27 @@
 spring:
+  # OAuth2 Resource Server Configuration (Keycloak)
+  security:
+    oauth2:
+      resource-server:
+        jwt:
+          issuer-uri: http://localhost:8090/realms/helakatha-agri-realm
+          jwk-set-uri: http://localhost:8090/realms/helakatha-agri-realm/protocol/openid-connect/certs
+
+  # MySQL Database Configuration
   datasource:
-    url: jdbc:mysql://localhost:3306/helaketha_agri
-    username: dbuser
-    password: password
+    url: jdbc:mysql://localhost:3306/helaketha_agri_db?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
 
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: true
+  sql:
+    init:
+      mode: always  # Safe to use 'always' because schema.sql uses 'CREATE TABLE IF NOT EXISTS'
+      schema-locations: classpath:schema.sql
+
+# Keycloak Admin Client Configuration
+keycloak:
+  server-url: http://localhost:8090
+  realm: helakatha-agri-realm
+  admin-client-id: helaketha-agri-admin
+  admin-client-secret: 6eEij10r2wW7JdmNYssnZQ2eu8pFjJi3

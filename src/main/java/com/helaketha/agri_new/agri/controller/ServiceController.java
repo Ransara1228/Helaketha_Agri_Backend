@@ -69,6 +69,36 @@ public class ServiceController {
         return ResponseEntity.ok(updated);
     }
 
+    @PatchMapping("/{id}")
+    public ResponseEntity<ServiceBooking> patch(@PathVariable Integer id,
+                                                @Valid @RequestBody ServiceBookingRequest request) {
+        return service.findById(id).map(existing -> {
+            if (request.getFarmerId() != null) {
+                existing.setFarmerId(request.getFarmerId());
+            }
+            if (request.getServiceType() != null) {
+                existing.setServiceType(request.getServiceType());
+            }
+            if (request.getProviderId() != null) {
+                existing.setProviderId(request.getProviderId());
+            }
+            if (request.getBookingDate() != null) {
+                existing.setBookingDate(request.getBookingDate());
+            }
+            if (request.getBookingTime() != null) {
+                existing.setBookingTime(request.getBookingTime());
+            }
+            if (request.getTotalCost() != null) {
+                existing.setTotalCost(request.getTotalCost());
+            }
+            if (request.getStatus() != null) {
+                existing.setStatus(request.getStatus());
+            }
+            ServiceBooking updated = service.update(id, existing);
+            return ResponseEntity.ok(updated);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<ServiceBooking> patchStatus(@PathVariable Integer id,
                                                       @Valid @RequestBody ServiceStatusUpdateRequest request) {

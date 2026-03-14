@@ -1,4 +1,4 @@
-package com.helaketha.agri_new.agri.dao;
+package com.helaketha.agri_new.agri.repository;
 
 import com.helaketha.agri_new.agri.entity.ServiceBooking;
 
@@ -6,7 +6,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface ServiceBookingDao {
+public interface ServiceBookingRepository {
     int insert(ServiceBooking booking);                      // returns generated id
     List<ServiceBooking> findAll();
     Optional<ServiceBooking> findById(Integer id);

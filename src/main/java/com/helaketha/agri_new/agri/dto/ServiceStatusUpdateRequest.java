@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Pattern;
 public class ServiceStatusUpdateRequest {
 
     @NotBlank
-    @Pattern(regexp = "PENDING|CONFIRMED|COMPLETED|CANCELLED")
+    @Pattern(regexp = "Pending|Accepted|Completed")
     private String status;
 
     public String getStatus() {

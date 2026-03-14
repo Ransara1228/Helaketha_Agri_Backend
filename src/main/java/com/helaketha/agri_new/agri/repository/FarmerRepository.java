@@ -1,11 +1,11 @@
-package com.helaketha.agri_new.agri.dao;
-
-import com.helaketha.agri_new.agri.entity.Farmer;
+package com.helaketha.agri_new.agri.repository;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface FarmerDao {
+import com.helaketha.agri_new.agri.entity.Farmer;
+
+public interface FarmerRepository {
     int insert(Farmer farmer);               // returns generated id
     List<Farmer> findAll();
     Optional<Farmer> findById(int id);

@@ -1,6 +1,6 @@
 package com.helaketha.agri_new.agri.service;
 
-import com.helaketha.agri_new.agri.dao.ServiceBookingDao;
+import com.helaketha.agri_new.agri.repository.ServiceBookingRepository;
 import com.helaketha.agri_new.agri.entity.ServiceBooking;
 import org.springframework.stereotype.Service;
 
@@ -11,9 +11,9 @@ import java.util.Optional;
 @Service
 public class ServiceBookingService {
 
-    private final ServiceBookingDao dao;
+    private final ServiceBookingRepository dao;
 
-    public ServiceBookingService(ServiceBookingDao dao) {
+    public ServiceBookingService(ServiceBookingRepository dao) {
         this.dao = dao;
     }
 

@@ -7,7 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 public class ServiceBookingRequest {
 
@@ -15,18 +17,23 @@ public class ServiceBookingRequest {
     @Positive
     private Integer farmerId;
 
-    @Positive
-    private Integer serviceId;
-
     @NotBlank
     private String serviceType;
+
+    @NotNull
+    @Positive
+    private Integer providerId;
 
     @NotNull
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate bookingDate;
 
-    @NotBlank
-    @Pattern(regexp = "PENDING|CONFIRMED|COMPLETED|CANCELLED")
+    @JsonFormat(pattern = "HH:mm:ss")
+    private LocalTime bookingTime;
+
+    private BigDecimal totalCost;
+
+    @Pattern(regexp = "Pending|Accepted|Completed")
     private String status;
 
     public Integer getFarmerId() {
@@ -35,14 +42,6 @@ public class ServiceBookingRequest {
 
     public void setFarmerId(Integer farmerId) {
         this.farmerId = farmerId;
-    }
-
-    public Integer getServiceId() {
-        return serviceId;
-    }
-
-    public void setServiceId(Integer serviceId) {
-        this.serviceId = serviceId;
     }
 
     public String getServiceType() {
@@ -61,6 +60,30 @@ public class ServiceBookingRequest {
         this.bookingDate = bookingDate;
     }
 
+    public Integer getProviderId() {
+        return providerId;
+    }
+
+    public void setProviderId(Integer providerId) {
+        this.providerId = providerId;
+    }
+
+    public LocalTime getBookingTime() {
+        return bookingTime;
+    }
+
+    public void setBookingTime(LocalTime bookingTime) {
+        this.bookingTime = bookingTime;
+    }
+
+    public BigDecimal getTotalCost() {
+        return totalCost;
+    }
+
+    public void setTotalCost(BigDecimal totalCost) {
+        this.totalCost = totalCost;
+    }
+
     public String getStatus() {
         return status;
     }
@@ -73,10 +96,12 @@ public class ServiceBookingRequest {
         return new ServiceBooking(
                 null,
                 farmerId,
-                serviceId,
                 serviceType,
+                providerId,
                 bookingDate,
-                status
+                bookingTime,
+                totalCost,
+                status != null ? status : "Pending"
         );
     }
 
