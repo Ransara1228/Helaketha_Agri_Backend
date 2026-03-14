@@ -2,23 +2,24 @@ package com.helaketha.agri_new.agri.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.core.convert.converter.Converter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Collection;
 import java.util.List;
 
 @Configuration
@@ -28,7 +29,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter
     ) throws Exception {
 
         http
@@ -66,7 +67,7 @@ public class SecurityConfig {
                 // OAuth2 Resource Server (JWT) - Keycloak
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt ->
-                                jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)
+                                jwt.jwtAuthenticationConverter(principalConverter(jwtAuthenticationConverter))
                         )
                 );
 
@@ -74,21 +75,10 @@ public class SecurityConfig {
     }
 
     /**
-     * JWT Decoder (Keycloak)
-     * Configured for helakatha-agri-realm
-     */
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withJwkSetUri(
-                "http://localhost:8090/realms/helakatha-agri-realm/protocol/openid-connect/certs"
-        ).build();
-    }
-
-    /**
      * Convert Keycloak roles → Spring Security authorities
      */
     @Bean
-    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
 
         JwtGrantedAuthoritiesConverter authoritiesConverter =
                 new JwtGrantedAuthoritiesConverter();
@@ -103,6 +93,29 @@ public class SecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         return converter;
+    }
+
+    private Converter<Jwt, AbstractAuthenticationToken> principalConverter(JwtAuthenticationConverter delegate) {
+        return new Converter<>() {
+            @Override
+            public AbstractAuthenticationToken convert(@NonNull Jwt jwt) {
+                AbstractAuthenticationToken delegateToken = delegate.convert(jwt);
+                if (delegateToken == null) {
+                    return null;
+                }
+                String username = jwt.getClaimAsString("preferred_username");
+                if (username == null) {
+                    username = jwt.getSubject();
+                }
+
+                // CHANGE HERE: Extract "sub" instead of "sid"
+                String keycloakUserId = jwt.getSubject(); // .getSubject() returns the 'sub' claim
+
+                UserPrincipal principal = new UserPrincipal(username, keycloakUserId, delegateToken.getAuthorities());
+                Collection<? extends GrantedAuthority> authorities = delegateToken.getAuthorities();
+                return new KeycloakAuthenticationToken(jwt, authorities, principal);
+            }
+        };
     }
 
     /**
