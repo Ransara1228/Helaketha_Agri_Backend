@@ -21,65 +21,26 @@ public class TractorDriverService {
     }
 
     public TractorDriver create(TractorDriver d) {
-        String keycloakUserId = null;
-        boolean isNewUser = false; // Track if we created a new user or found an existing one
+        KeycloakAdminService.UserProvisioningResult provisioningResult = null;
 
         try {
-            // -----------------------------------------------------------
-            // STEP 1: Keycloak User Management
-            // -----------------------------------------------------------
-            try {
-                // Try to create a NEW user in Keycloak
-                keycloakUserId = keycloakAdminService.createUser(
-                        d.getUsername(),
-                        d.getEmail(),
-                        extractFirstName(d.getName()),
-                        extractLastName(d.getName()),
-                        "TRACTOR_DRIVER"
-                );
-                isNewUser = true; // We successfully created a fresh user
+            provisioningResult = keycloakAdminService.createOrLinkUserWithRole(
+                    d.getUsername(),
+                    d.getEmail(),
+                    extractFirstName(d.getName()),
+                    extractLastName(d.getName()),
+                    "TRACTOR_DRIVER"
+            );
 
-            } catch (RuntimeException e) {
-                // Handle "User already exists" scenario gracefully
-                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                    System.out.println("User " + d.getUsername() + " exists in Keycloak. Linking to existing account.");
-
-                    // 1. Get existing ID from Keycloak
-                    keycloakUserId = keycloakAdminService.getUserIdByUsername(d.getUsername());
-
-                    // 2. Reset Password (so the driver can log in with the new password)
-                    String newTempPass = keycloakAdminService.generateTemporaryPassword();
-                    keycloakAdminService.updateUserPassword(keycloakUserId, newTempPass);
-                    System.out.println("Password reset for existing user: " + d.getUsername());
-
-                    // 3. Ensure they have the correct Role
-                    keycloakAdminService.assignRole(keycloakUserId, "TRACTOR_DRIVER");
-
-                    // Note: isNewUser remains false
-                } else {
-                    // If it's a different error (e.g., connection failed), rethrow it
-                    throw e;
-                }
-            }
-
-            // -----------------------------------------------------------
-            // STEP 2: Local Database Save
-            // -----------------------------------------------------------
-            d.setKeycloakUserId(keycloakUserId);
+            d.setKeycloakUserId(provisioningResult.userId());
             int id = dao.insert(d);
             d.setTractorDriverId(id);
             return d;
 
         } catch (Exception e) {
-            // -----------------------------------------------------------
-            // ROLLBACK LOGIC
-            // -----------------------------------------------------------
-            // Only delete from Keycloak if WE created the user in this transaction.
-            // If we linked to an existing user, DO NOT delete them if the local DB save fails.
-            if (isNewUser && keycloakUserId != null) {
+            if (provisioningResult != null && provisioningResult.created()) {
                 try {
-                    System.err.println("Rolling back created Keycloak user: " + keycloakUserId);
-                    keycloakAdminService.deleteUser(keycloakUserId);
+                    keycloakAdminService.deleteUser(provisioningResult.userId());
                 } catch (Exception ex) {
                     System.err.println("Rollback failed: " + ex.getMessage());
                 }

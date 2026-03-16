@@ -25,9 +25,10 @@ public class FarmerService {
      * then save to database with Keycloak user ID
      */
     public Farmer create(Farmer f) {
+        KeycloakAdminService.UserProvisioningResult provisioningResult = null;
         try {
-            // Step 1: Create user in Keycloak (password is auto-generated and temporary)
-            String keycloakUserId = keycloakAdminService.createUser(
+            // Step 1: Create or link user in Keycloak and ensure FARMER role
+            provisioningResult = keycloakAdminService.createOrLinkUserWithRole(
                     f.getUsername(),
                     f.getEmail(),
                     extractFirstName(f.getFullName()),
@@ -36,13 +37,20 @@ public class FarmerService {
             );
 
             // Step 2: Set Keycloak user ID in farmer entity
-            f.setKeycloakUserId(keycloakUserId);
+            f.setKeycloakUserId(provisioningResult.userId());
 
             // Step 3: Save farmer to database with Keycloak user ID
             int id = dao.insert(f);
             f.setFarmerId(id);
             return f;
         } catch (Exception e) {
+            if (provisioningResult != null && provisioningResult.created()) {
+                try {
+                    keycloakAdminService.deleteUser(provisioningResult.userId());
+                } catch (Exception rollbackEx) {
+                    System.err.println("Rollback failed: " + rollbackEx.getMessage());
+                }
+            }
             throw new RuntimeException("Failed to create farmer: " + e.getMessage(), e);
         }
     }

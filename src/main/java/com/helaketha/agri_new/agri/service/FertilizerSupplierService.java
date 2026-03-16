@@ -2,7 +2,6 @@ package com.helaketha.agri_new.agri.service;
 
 import com.helaketha.agri_new.agri.entity.FertilizerSupplier;
 import com.helaketha.agri_new.agri.repository.FertilizerSupplierRepository;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,53 +21,31 @@ public class FertilizerSupplierService {
     }
 
     public FertilizerSupplier create(FertilizerSupplier s) {
-        String keycloakUserId = null;
-        boolean isNewUser = false;
+        KeycloakAdminService.UserProvisioningResult provisioningResult = null;
 
         try {
-            // 1. Keycloak Logic
-            try {
-                keycloakUserId = keycloakAdminService.createUser(
-                        s.getUsername(),
-                        s.getEmail(),
-                        extractFirstName(s.getName()),
-                        extractLastName(s.getName()),
-                        "FERTILIZER_SUPPLIER"
-                );
-                isNewUser = true;
-            } catch (RuntimeException e) {
-                if (e.getMessage() != null && e.getMessage().contains("already exists")) {
-                    try {
-                        keycloakUserId = keycloakAdminService.getUserIdByUsername(s.getUsername());
-                        String newPass = keycloakAdminService.generateTemporaryPassword();
-                        keycloakAdminService.updateUserPassword(keycloakUserId, newPass);
-                        keycloakAdminService.assignRole(keycloakUserId, "FERTILIZER_SUPPLIER");
-                    } catch (RuntimeException notFoundEx) {
-                        throw new RuntimeException("The email address is already in use by another account.");
-                    }
-                } else {
-                    throw e;
-                }
-            }
+            provisioningResult = keycloakAdminService.createOrLinkUserWithRole(
+                    s.getUsername(),
+                    s.getEmail(),
+                    extractFirstName(s.getName()),
+                    extractLastName(s.getName()),
+                    "FERTILIZER_SUPPLIER"
+            );
 
-            // 2. Database Logic
-            s.setKeycloakUserId(keycloakUserId);
+            s.setKeycloakUserId(provisioningResult.userId());
             int id = dao.insert(s);
             s.setSupplierId(id);
             return s;
 
-        } catch (DuplicateKeyException dke) {
-            // --- CATCH DB DUPLICATE USERNAME ---
-            if (isNewUser && keycloakUserId != null) {
-                try { keycloakAdminService.deleteUser(keycloakUserId); } catch (Exception ex) {}
-            }
-            throw new RuntimeException("User name already exists");
-
         } catch (Exception e) {
-            if (isNewUser && keycloakUserId != null) {
-                try { keycloakAdminService.deleteUser(keycloakUserId); } catch (Exception ex) {}
+            if (provisioningResult != null && provisioningResult.created()) {
+                try {
+                    keycloakAdminService.deleteUser(provisioningResult.userId());
+                } catch (Exception ex) {
+                    System.err.println("Rollback failed: " + ex.getMessage());
+                }
             }
-            throw new RuntimeException(e.getMessage());
+            throw new RuntimeException("Failed to create fertilizer supplier: " + e.getMessage(), e);
         }
     }
 

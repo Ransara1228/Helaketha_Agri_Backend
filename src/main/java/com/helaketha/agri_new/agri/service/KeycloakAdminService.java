@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import jakarta.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class KeycloakAdminService {
@@ -75,7 +76,31 @@ public class KeycloakAdminService {
         }
     }
 
-    // --- NEW HELPER METHODS ---
+    public UserProvisioningResult createOrLinkUserWithRole(
+            String username,
+            String email,
+            String firstName,
+            String lastName,
+            String role
+    ) {
+        try {
+            String userId = createUser(username, email, firstName, lastName, role);
+            return new UserProvisioningResult(userId, true);
+        } catch (RuntimeException ex) {
+            String message = ex.getMessage() == null ? "" : ex.getMessage();
+            if (!message.contains("already exists")) {
+                throw ex;
+            }
+        }
+
+        String existingUserId = findUserIdByUsernameOrEmail(username, email);
+        if (existingUserId == null || existingUserId.isBlank()) {
+            throw new RuntimeException("User exists in Keycloak but could not be linked by username/email");
+        }
+
+        assignRole(existingUserId, role);
+        return new UserProvisioningResult(existingUserId, false);
+    }
 
     public String getUserIdByUsername(String username) {
         Keycloak keycloak = getKeycloakAdminClient();
@@ -85,6 +110,32 @@ public class KeycloakAdminService {
                 throw new RuntimeException("User not found in Keycloak: " + username);
             }
             return users.get(0).getId();
+        } finally {
+            keycloak.close();
+        }
+    }
+
+    public String findUserIdByUsernameOrEmail(String username, String email) {
+        Keycloak keycloak = getKeycloakAdminClient();
+        try {
+            UsersResource usersResource = keycloak.realm(realm).users();
+
+            List<UserRepresentation> usernameMatches = usersResource.search(username, true);
+            for (UserRepresentation user : usernameMatches) {
+                if (username.equalsIgnoreCase(user.getUsername())) {
+                    return user.getId();
+                }
+            }
+
+            if (email != null && !email.isBlank()) {
+                List<UserRepresentation> emailMatches = usersResource.searchByEmail(email, true);
+                for (UserRepresentation user : emailMatches) {
+                    if (email.equalsIgnoreCase(user.getEmail())) {
+                        return user.getId();
+                    }
+                }
+            }
+            return null;
         } finally {
             keycloak.close();
         }
@@ -106,6 +157,12 @@ public class KeycloakAdminService {
             System.err.println("Warning: Failed to assign role '" + roleName + "' to user. Error: " + e.getMessage());
         } finally {
             keycloak.close();
+        }
+    }
+
+    public record UserProvisioningResult(String userId, boolean created) {
+        public UserProvisioningResult {
+            userId = Objects.requireNonNull(userId, "userId cannot be null");
         }
     }
 

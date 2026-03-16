@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -20,7 +21,10 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Configuration
 @EnableMethodSecurity
@@ -49,13 +53,11 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // SECURED ENDPOINTS - Require OAuth2 authentication
-                        .requestMatchers("/api/farmers/**").permitAll()
-                        .requestMatchers("/api/harvester-drivers/**").permitAll()
-                        .requestMatchers("/api/tractor-drivers/**").permitAll()
-                        .requestMatchers("/api/fertilizer-suppliers/**").permitAll()
-                        .requestMatchers("/api/services/**").permitAll()
-                        .requestMatchers("/api/provider-schedules/**").permitAll()
+                        // Registration endpoints (public)
+                        .requestMatchers(HttpMethod.POST, "/api/farmers").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/harvester-drivers").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/tractor-drivers").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/fertilizer-suppliers").permitAll()
 
                         // SECURED ENDPOINTS
                         .requestMatchers("/api/**").authenticated()
@@ -83,16 +85,32 @@ public class SecurityConfig {
         JwtGrantedAuthoritiesConverter authoritiesConverter =
                 new JwtGrantedAuthoritiesConverter();
 
-        // Keycloak role location
-        authoritiesConverter.setAuthoritiesClaimName("realm_access.roles");
-        authoritiesConverter.setAuthorityPrefix("ROLE_");
-
         JwtAuthenticationConverter converter =
                 new JwtAuthenticationConverter();
 
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> extractAuthorities(jwt, authoritiesConverter));
 
         return converter;
+    }
+
+    private Collection<GrantedAuthority> extractAuthorities(
+            Jwt jwt,
+            JwtGrantedAuthoritiesConverter scopeConverter
+    ) {
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>(scopeConverter.convert(jwt));
+
+        Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess != null) {
+            Object rolesObj = realmAccess.get("roles");
+            if (rolesObj instanceof Collection<?> roles) {
+                for (Object role : roles) {
+                    if (role != null) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+                    }
+                }
+            }
+        }
+        return authorities;
     }
 
     private Converter<Jwt, AbstractAuthenticationToken> principalConverter(JwtAuthenticationConverter delegate) {
