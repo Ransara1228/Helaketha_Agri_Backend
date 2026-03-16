@@ -21,11 +21,10 @@ public class HarvesterDriverService {
     }
 
     public HarvesterDriver create(HarvesterDriver d) {
-        String keycloakUserId = null;
+        KeycloakAdminService.UserProvisioningResult provisioningResult = null;
         try {
-            // 1. Create User in Keycloak
-            // This assigns "HARVESTER_DRIVER" role and generates a temp password
-            keycloakUserId = keycloakAdminService.createUser(
+            // 1. Create or link user in Keycloak and ensure HARVESTER_DRIVER role
+            provisioningResult = keycloakAdminService.createOrLinkUserWithRole(
                     d.getUsername(),
                     d.getEmail(),
                     extractFirstName(d.getName()),
@@ -34,7 +33,7 @@ public class HarvesterDriverService {
             );
 
             // 2. Set the returned Keycloak ID on the entity
-            d.setKeycloakUserId(keycloakUserId);
+            d.setKeycloakUserId(provisioningResult.userId());
 
             // 3. Save to the database
             int id = dao.insert(d);
@@ -43,9 +42,9 @@ public class HarvesterDriverService {
 
         } catch (Exception e) {
             // Rollback: If DB save fails, remove the user from Keycloak
-            if (keycloakUserId != null) {
+            if (provisioningResult != null && provisioningResult.created()) {
                 try {
-                    keycloakAdminService.deleteUser(keycloakUserId);
+                    keycloakAdminService.deleteUser(provisioningResult.userId());
                 } catch (Exception ex) {
                     System.err.println("Rollback failed: " + ex.getMessage());
                 }
